@@ -38,9 +38,6 @@ while [[ "$#" -gt 0 ]];do
 
 done 
 
-# corner cases
-# - empty input 
-# - 
 
 
 if [[ "$train_file" == "" || "$val_file" == "" || "$input" == "" ]]; then
@@ -54,50 +51,23 @@ if [ ! -f "$input" ]; then
     exit 3
 fi
 
-truncate -s 0 $train_file
-truncate -s 0 $val_file
+header=$(head -n 1 "$input")
+data=$(tail -n +2 "$input")
 
-lines=$(wc -l $input | awk '{ print $1 }')
-
-if [[ $lines -lt 2 ]]; then 
+if [ -z "$data" ]; then 
     echo "Input CSV file is empty"
     exit 4
 fi
 
-train_part=$(( lines * train_ratio / 100 ))
+if $shuffle; then
+    data=$(echo "$data" | shuf)
+fi
 
-iter=0
-header=""
+total_lines=$(echo "$data" | wc -l)
+train_part=$((total_lines * train_ratio / 100))
 
-while IFS= read -r line; do
-    if [[ iter -eq 0 ]]; then 
-        header=$line
-        ((iter+=1)) 
-        continue
-    fi 
-    if [[ iter -le train_part ]]; then
-        echo $line >> train.csv  
-    else 
-        echo $line >> val.csv 
-    fi
-    ((iter+=1))
-done < Titanic-Dataset.csv
+echo "$header" > "$train_file"
+echo "$data" | head -n "$train_part" >> "$train_file"
 
-
-if $shuffle ; then 
-    shuf -o val.csv < val.csv
-    shuf -o train.csv < train.csv
-fi 
-
-# macos
-# sed -i '' "1i\\
-# ${header}
-# " val.csv
-
-# sed -i '' "1i\\
-# ${header}
-# " train.csv
-
-# linuh 
-sed -i "1i\\$header\\" train.csv
-sed -i "1i\\$header\\" val.csv
+echo "$header" > "$val_file"
+echo "$data" | tail -n +"$((train_part + 1))" >> "$val_file"
