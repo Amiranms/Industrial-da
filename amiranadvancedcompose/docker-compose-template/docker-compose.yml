@@ -1,0 +1,73 @@
+
+
+services: 
+  postgres:
+    image: postgres:13-alpine3.20
+    container_name: postgres
+    env_file:
+      - ./db/.db.env
+    volumes:
+      - postgres_data_backend:/var/lib/postgresql/data
+    ports:
+      - "5433:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U promda -d promda"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+    networks:
+      - app-net
+
+  init-db:
+    container_name: init-db
+    build:
+      context: ./backend
+    command: ["sh", "-c", "python init_db.py && python seed.py"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    env_file:
+      - ./db/.db.env
+    networks:
+      - app-net
+
+  backend:
+    container_name: backend
+    build: ./backend
+    ports: 
+      - "8000:8000"
+    env_file:
+      - ./db/.db.env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      init-db:
+        condition: service_completed_successfully 
+    healthcheck:
+      start_period: 10s
+      timeout: 5s
+
+    networks:
+      - app-net
+
+  frontend: 
+    container_name: frontend
+    build: 
+      context: ./frontend
+    ports: 
+      - "8189:80"
+    depends_on:
+      - backend
+    networks:
+      - app-net
+    
+
+
+volumes:
+  postgres_data_backend:
+
+networks:
+  app-net:
+    driver: bridge
